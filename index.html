@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiosko Deportivo</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#16181d;--mut:#6b7280;--line:#e3e1da;--acc:#0b7a4b;--accbg:#e2f3ea;--warn:#c2410c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#101214;--card:#1a1d21;--ink:#eceae4;--mut:#9aa1ab;--line:#2c3138;--acc:#3ddc97;--accbg:#173a2b;--warn:#fb923c;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,serif}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 48px}
+h1{font:800 clamp(26px,5vw,38px)/1.1 "Helvetica Neue",Arial,sans-serif;margin:0 0 4px;letter-spacing:-.02em}h1 span{color:var(--acc)}
+.ui,button,input,select{font-family:"Helvetica Neue",Arial,sans-serif}
+.stat{color:var(--mut);font-size:13px;margin:0 0 16px}.stat b{color:var(--warn)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+input,select,button{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:14px;min-width:0}
+button{cursor:pointer;padding:8px 12px;font-size:13px}.bar input{flex:1 1 220px}
+button.pri{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:700}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
+.chip{white-space:nowrap;border-radius:999px;padding:6px 12px}.chip.on{background:var(--accbg);border-color:var(--acc);color:var(--acc);font-weight:700}
+.chip small{opacity:.7;margin-left:4px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tab{border:0;border-bottom:3px solid transparent;border-radius:0;background:none}.tab.on{border-color:var(--acc);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.card.read{opacity:.6}
+.meta{display:flex;justify-content:space-between;font:12px "Helvetica Neue",Arial,sans-serif;color:var(--mut)}
+.src{color:var(--acc);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.card h3{margin:0;font-size:18px;line-height:1.25}.card h3 a{color:inherit;text-decoration:none}.card h3 a:hover{text-decoration:underline}
+.card p{margin:0;color:var(--mut);font-size:14px}
+.tag{font:11px "Helvetica Neue",Arial,sans-serif;background:var(--accbg);color:var(--acc);border-radius:4px;padding:1px 6px;align-self:flex-start}
+.acts{display:flex;gap:6px;margin-top:auto}.acts button{padding:5px 9px;font-size:12px}.star.on{color:#d99a00;border-color:#d99a00}
+.empty{grid-column:1/-1;text-align:center;color:var(--mut);padding:40px 10px;border:1px dashed var(--line);border-radius:12px}
+</style>
+</head>
+<body><div class="wrap">
+<h1>Kiosko <span>Deportivo</span></h1>
+<p class="stat ui" id="stat">Cargando noticias…</p>
+<div class="bar ui">
+<input type="search" id="q" placeholder="Buscar titular o periódico…" aria-label="Buscar">
+<select id="cat" aria-label="Categoría"></select>
+<button class="pri" id="rf">Actualizar</button>
+</div>
+<div class="chips ui" id="chips"></div>
+<div class="tabs ui" id="tabs"></div>
+<div class="grid" id="grid"></div>
+</div>
+<script>
+var CATS=["Fútbol","Baloncesto","Tenis","Motor","Ciclismo","General"];
+var S={items:[],sources:[],src:"Todos",tab:"all"},fav=ld("kd:fav"),read=ld("kd:read");
+function ld(k){try{return JSON.parse(localStorage.getItem(k))||{}}catch(e){return{}}}
+function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function $(i){return document.getElementById(i)}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function ago(ts){var m=Math.round((Date.now()-ts)/6e4);if(m<60)return"hace "+Math.max(m,1)+" min";var h=Math.round(m/60);return h<24?"hace "+h+" h":"hace "+Math.round(h/24)+" d"}
+async function load(){
+  $("rf").disabled=true;$("stat").textContent="Cargando noticias…";
+  try{var r=await fetch("/api/news");if(!r.ok)throw 0;var d=await r.json();S.items=d.items;S.sources=d.sources;S.updated=d.updated;S.err=false}
+  catch(e){S.err=true}
+  $("rf").disabled=false;render()}
+function status(){var s=$("stat");s.textContent="";
+  if(S.err){s.appendChild(el("b",0,"No se pudieron cargar las noticias. "));s.appendChild(document.createTextNode("Comprueba que la función /api/news está desplegada."));return}
+  var bad=S.sources.filter(function(x){return!x.ok}),ok=S.sources.length-bad.length;
+  s.appendChild(document.createTextNode("Actualizado "+ago(S.updated)+" · "+ok+" de "+S.sources.length+" periódicos responden"));
+  if(bad.length)s.appendChild(el("b",0," · Fallan: "+bad.map(function(x){return x.name+" ("+x.error+")"}).join(", ")))}
+function counts(){var c={};S.items.forEach(function(i){c[i.src]=(c[i.src]||0)+1});return c}
+function list(){var q=$("q").value.trim().toLowerCase(),c=$("cat").value;
+  return S.items.filter(function(i){
+    if(S.src!=="Todos"&&i.src!==S.src)return false;if(c&&i.c!==c)return false;
+    if(S.tab==="fav"&&!fav[i.u])return false;if(S.tab==="unread"&&read[i.u])return false;
+    return!q||(i.t+" "+i.n+" "+i.src).toLowerCase().indexOf(q)>=0})}
+function card(i){var d=el("article","card"+(read[i.u]?" read":""));
+  var m=el("div","meta");m.appendChild(el("span","src",i.src));m.appendChild(el("span",0,ago(i.ts)));d.appendChild(m);
+  var h=el("h3"),a=el("a",0,i.t);a.href=i.u;a.target="_blank";a.rel="noopener noreferrer";h.appendChild(a);d.appendChild(h);
+  if(i.n)d.appendChild(el("p",0,i.n));d.appendChild(el("span","tag",i.c));
+  var ac=el("div","acts ui"),s=el("button","star"+(fav[i.u]?" on":""),fav[i.u]?"★ Favorita":"☆ Favorita");
+  s.onclick=function(){fav[i.u]?delete fav[i.u]:fav[i.u]=1;sv("kd:fav",fav);render()};
+  var r=el("button",0,read[i.u]?"Marcar por leer":"Marcar leída");
+  r.onclick=function(){read[i.u]?delete read[i.u]:read[i.u]=1;sv("kd:read",read);render()};
+  ac.appendChild(s);ac.appendChild(r);d.appendChild(ac);return d}
+function render(){status();
+  var ch=$("chips");ch.innerHTML="";var c=counts();
+  function mk(n,k){var b=el("button","chip"+(S.src===n?" on":""),n);b.appendChild(el("small",0,k));b.onclick=function(){S.src=n;render()};ch.appendChild(b)}
+  mk("Todos",S.items.length);Object.keys(c).sort().forEach(function(k){mk(k,c[k])});
+  var t=$("tabs");t.innerHTML="";
+  [["all","Todas",S.items.length],["unread","Por leer",S.items.filter(function(i){return!read[i.u]}).length],["fav","Favoritas",S.items.filter(function(i){return fav[i.u]}).length]].forEach(function(p){
+    var b=el("button","tab"+(S.tab===p[0]?" on":""),p[1]+" ("+p[2]+")");b.onclick=function(){S.tab=p[0];render()};t.appendChild(b)});
+  var g=$("grid");g.innerHTML="";var l=list();
+  if(!l.length)g.appendChild(el("div","empty",S.err?"Sin datos.":"No hay noticias con estos filtros."));
+  l.forEach(function(i){g.appendChild(card(i))})}
+(function(){var s=$("cat"),o=el("option",0,"Todas las categorías");o.value="";s.appendChild(o);
+  CATS.forEach(function(k){var x=el("option",0,k);x.value=k;s.appendChild(x)});
+  $("q").oninput=$("cat").oninput=render;$("rf").onclick=load;
+  load();setInterval(load,300000)})();
+</script></body></html>
